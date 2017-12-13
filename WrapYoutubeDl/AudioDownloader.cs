@@ -52,7 +52,7 @@ namespace WrapYoutubeDl
             }
 
             // this is the path where you keep the binaries (ffmpeg, youtube-dl etc)
-            var binaryPath = ConfigurationManager.AppSettings["binaryfolder"];
+            var binaryPath = Environment.GetEnvironmentVariable("PATH");
             if (string.IsNullOrEmpty(binaryPath))
             {
                 throw new Exception("Cannot read 'binaryfolder' variable from app.config / web.config.");
@@ -71,7 +71,7 @@ namespace WrapYoutubeDl
             Process.StartInfo.UseShellExecute = false;
             Process.StartInfo.RedirectStandardOutput = true;
             Process.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
-            Process.StartInfo.FileName = System.IO.Path.Combine(binaryPath, "youtube-dl.exe");
+            Process.StartInfo.FileName = System.IO.Path.Combine(binaryPath, RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "youtube-dl.exe" : "youtube-dl");
             Process.StartInfo.Arguments = arguments;
             Process.StartInfo.CreateNoWindow = true;
             Process.EnableRaisingEvents = true;
@@ -180,5 +180,68 @@ namespace WrapYoutubeDl
             }
         }
     }
+    public static class Extensions
+    {
+        internal static bool ExistsOnPath(this FileInfo fileInfo)
+        {
+            return !string.IsNullOrWhiteSpace(fileInfo.GetFullPath());
+        }
+
+        /// <summary>
+        ///     Attempts to resolve the path of a given file info into a fully absolute path
+        /// </summary>
+        /// <param name="fileInfo">
+        ///     File with relative path
+        /// </param>
+        /// <returns>
+        ///     File's absolute path
+        /// </returns>
+        internal static string GetFullPath(this FileInfo fileInfo)
+        {
+            if (File.Exists(fileInfo.Name))
+            {
+                return Path.GetFullPath(fileInfo.Name);
+            }
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                string filePath = fileInfo.Name + ".exe";
+                if (File.Exists(filePath))
+                {
+                    return Path.GetFullPath(filePath);
+                }
+            }
+
+            string environmentVariable = Environment.GetEnvironmentVariable("PATH");
+            if (environmentVariable != null)
+            {
+                foreach (string path in environmentVariable.Split(Path.PathSeparator))
+                {
+                    string fullPath = Path.Combine(path, fileInfo.Name);
+                    if (File.Exists(fullPath))
+                    {
+                        return fullPath;
+                    }
+
+                    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                    {
+                        fullPath += ".exe";
+                        if (File.Exists(fullPath))
+                        {
+                            return fullPath;
+                        }
+                    }
+                }
+            }
+            
+            return null;
+        }
+
+        internal static string RemoveExtraWhitespace(this string str)
+        {
+            return string.Join(" ", str.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
+        }
+    }
+}
 
 }
